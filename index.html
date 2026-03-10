@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Drag&Drop — Real File Converter</title>
+<meta name="description" content="Convert, compress, merge and edit PDFs and images instantly in your browser. 100% free, private and no upload needed."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Figtree:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#03080f;--bg2:#070f1a;
+  --s1:rgba(255,255,255,0.038);--s2:rgba(255,255,255,0.07);--s3:rgba(255,255,255,0.12);
+  --b1:rgba(255,255,255,0.07);--b2:rgba(255,255,255,0.13);--b3:rgba(255,255,255,0.22);
+  --t1:#e8f4ff;--t2:rgba(232,244,255,0.55);--t3:rgba(232,244,255,0.28);
+  --ac:#1d8cf8;--ac2:#38bdf8;--ac3:#0ea5e9;
+  --red:#ff6b6b;--green:#10b981;
+}
+.light{
+  --bg:#eef6ff;--bg2:#e0eefa;
+  --s1:rgba(255,255,255,0.65);--s2:rgba(255,255,255,0.82);--s3:rgba(255,255,255,0.97);
+  --b1:rgba(0,60,120,0.07);--b2:rgba(0,60,120,0.12);--b3:rgba(0,60,120,0.2);
+  --t1:#061220;--t2:rgba(6,18,32,0.55);--t3:rgba(6,18,32,0.32);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Figtree',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;overflow-x:hidden;transition:background .35s,color .35s}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px}
+button{font-family:'Figtree',sans-serif;cursor:pointer}
+
+@keyframes orb1{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(70px,-55px) scale(1.08)}66%{transform:translate(-35px,45px) scale(.94)}}
+@keyframes orb2{0%,100%{transform:translate(0,0)}40%{transform:translate(-65px,75px) scale(1.06)}80%{transform:translate(55px,-28px) scale(.97)}}
+@keyframes orb3{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.15)}}
+@keyframes orb4{0%,100%{transform:translate(0,0) scale(1)}60%{transform:translate(40px,-30px) scale(1.05)}}
+@keyframes slideUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes shimmer{0%{background-position:-300% center}100%{background-position:300% center}}
+@keyframes bounceIn{0%{opacity:0;transform:scale(.5)}65%{transform:scale(1.08)}100%{opacity:1;transform:scale(1)}}
+@keyframes gradShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes pulse{0%,100%{opacity:.45;transform:scale(1)}50%{opacity:1;transform:scale(1.5)}}
+@keyframes appear{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes waveX{0%,100%{transform:scaleX(1)}50%{transform:scaleX(1.04)}}
+
+/* ── ORBS ─────────────────────────────────── */
+.orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.orb{position:absolute;border-radius:50%;filter:blur(88px)}
+.orb-a{width:700px;height:700px;background:radial-gradient(circle,rgba(29,140,248,.16) 0%,transparent 68%);top:-160px;left:-140px;animation:orb1 24s ease-in-out infinite}
+.orb-b{width:600px;height:600px;background:radial-gradient(circle,rgba(14,165,233,.13) 0%,transparent 68%);bottom:-150px;right:-100px;animation:orb2 30s ease-in-out infinite}
+.orb-c{width:480px;height:480px;background:radial-gradient(circle,rgba(56,189,248,.09) 0%,transparent 68%);top:50%;left:50%;transform:translate(-50%,-50%);animation:orb3 22s ease-in-out infinite}
+.orb-d{width:350px;height:350px;background:radial-gradient(circle,rgba(6,182,212,.10) 0%,transparent 68%);top:30%;right:10%;animation:orb4 18s ease-in-out infinite}
+.light .orb-a{background:radial-gradient(circle,rgba(29,140,248,.11) 0%,transparent 68%)}
+.light .orb-b{background:radial-gradient(circle,rgba(14,165,233,.08) 0%,transparent 68%)}
+.light .orb-c{background:radial-gradient(circle,rgba(56,189,248,.07) 0%,transparent 68%)}
+.light .orb-d{background:radial-gradient(circle,rgba(6,182,212,.07) 0%,transparent 68%)}
+
+/* ── NAV ─────────────────────────────────── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 52px;height:66px;background:rgba(3,8,15,.75);backdrop-filter:blur(30px);border-bottom:1px solid var(--b1);transition:background .35s}
+.light nav{background:rgba(238,246,255,.78)}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;background:linear-gradient(135deg,#1d8cf8,#38bdf8,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
+.logo-icon{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#1d8cf8,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.nav-r{display:flex;align-items:center;gap:20px}
+.nav-link{font-size:13.5px;font-weight:500;color:var(--t2);transition:color .2s;cursor:pointer}
+.nav-link:hover{color:var(--t1)}
+.search-wrap{position:relative}
+.search-wrap input{padding:8px 14px 8px 34px;border-radius:100px;background:var(--s2);border:1px solid var(--b1);color:var(--t1);font-size:13px;outline:none;width:172px;font-family:'Figtree',sans-serif;transition:all .22s}
+.search-wrap input:focus{border-color:var(--ac);width:208px;background:var(--s3)}
+.search-wrap input::placeholder{color:var(--t3)}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--t3);pointer-events:none}
+.theme-btn{width:38px;height:22px;border-radius:100px;border:1px solid var(--b2);background:var(--s2);position:relative;cursor:pointer;transition:all .3s}
+.theme-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:linear-gradient(135deg,var(--ac),var(--ac2));transition:left .3s;box-shadow:0 2px 6px rgba(29,140,248,.4)}
+.light .theme-knob{left:calc(100% - 18px)}
+
+/* ── HERO ─────────────────────────────────── */
+.hero{position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:110px 24px 90px;gap:24px}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:7px 18px;border-radius:100px;font-size:12.5px;font-weight:500;color:var(--ac2);background:rgba(29,140,248,.11);border:1px solid rgba(29,140,248,.25);animation:fadeIn .7s ease-out}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse 2.2s ease-in-out infinite;flex-shrink:0}
+.hero-title{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(40px,7.5vw,94px);line-height:.96;letter-spacing:-3px;color:var(--t1);max-width:900px;animation:slideUp .7s ease-out .1s both}
+.hero-title .grad{background:linear-gradient(135deg,#1d8cf8 0%,#38bdf8 45%,#06b6d4 80%);background-size:200% 200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:gradShift 5s ease infinite}
+.hero-sub{font-size:clamp(15px,2vw,19px);color:var(--t2);max-width:540px;line-height:1.72;font-weight:300;animation:slideUp .7s ease-out .2s both}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;animation:slideUp .7s ease-out .3s both}
+.btn-primary{padding:14px 34px;border-radius:14px;font-size:15px;font-weight:600;border:none;background:linear-gradient(135deg,#1d8cf8,#06b6d4);color:#fff;box-shadow:0 8px 30px rgba(29,140,248,.35);transition:all .22s}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 42px rgba(29,140,248,.48)}
+.btn-ghost{padding:14px 32px;border-radius:14px;font-size:15px;font-weight:500;background:var(--s2);border:1px solid var(--b2);color:var(--t1);transition:all .22s}
+.btn-ghost:hover{border-color:var(--ac);color:var(--ac2);transform:translateY(-2px)}
+.hero-stats{display:flex;gap:44px;flex-wrap:wrap;justify-content:center;animation:fadeIn .9s ease-out .5s both}
+.stat-n{font-family:'Syne',sans-serif;font-size:30px;font-weight:800;color:var(--t1)}
+.stat-l{font-size:11.5px;color:var(--t3);margin-top:3px;letter-spacing:.3px}
+
+/* ── WAVE DIVIDER ─────────────────────────── */
+.wave-sep{position:relative;z-index:1;overflow:hidden;line-height:0;margin-top:-2px}
+.wave-sep svg{display:block;width:100%;height:60px}
+
+/* ── SECTIONS ─────────────────────────────── */
+section.content{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:80px 44px}
+.sec-label{font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--ac2);margin-bottom:10px}
+.sec-title{font-family:'Syne',sans-serif;font-size:clamp(26px,4vw,46px);font-weight:800;letter-spacing:-1px;color:var(--t1);margin-bottom:10px}
+.sec-sub{font-size:15.5px;color:var(--t2);max-width:530px;line-height:1.65;font-weight:300}
+
+/* ── TABS ─────────────────────────────────── */
+.cat-tabs{display:flex;gap:8px;margin-bottom:28px;flex-wrap:wrap}
+.cat-tab{padding:8px 20px;border-radius:100px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--b1);color:var(--t2);background:transparent;transition:all .22s;font-family:'Figtree',sans-serif}
+.cat-tab:hover:not(.active){border-color:var(--b2);color:var(--t1)}
+.cat-tab.active{background:linear-gradient(135deg,#1d8cf8,#06b6d4);color:#fff;border-color:transparent;box-shadow:0 4px 18px rgba(29,140,248,.3)}
+
+/* ── TOOL GRID ────────────────────────────── */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:13px}
+.tool-card{padding:22px 18px;border-radius:20px;cursor:pointer;background:var(--s1);border:1px solid var(--b1);transition:transform .28s cubic-bezier(.34,1.56,.64,1),box-shadow .28s,border-color .2s;position:relative;overflow:hidden;animation:appear .4s ease-out both}
+.tool-card::after{content:'';position:absolute;inset:0;border-radius:20px;opacity:0;transition:opacity .3s;background:var(--cg,rgba(29,140,248,.05))}
+.tool-card:hover{transform:translateY(-6px) scale(1.02);border-color:var(--b2);box-shadow:0 20px 56px rgba(0,0,0,.28)}
+.tool-card:hover::after{opacity:1}
+.tc-icon{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:13px;position:relative;z-index:1}
+.tc-name{font-family:'Syne',sans-serif;font-size:14.5px;font-weight:700;color:var(--t1);margin-bottom:4px;position:relative;z-index:1}
+.tc-desc{font-size:11.5px;color:var(--t2);line-height:1.45;position:relative;z-index:1}
+.tc-badge{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:100px;margin-top:7px;display:inline-block;position:relative;z-index:1}
+.tc-badge.works{background:rgba(16,185,129,.14);color:#10b981;border:1px solid rgba(16,185,129,.24)}
+.tc-badge.server{background:rgba(251,191,36,.11);color:#f59e0b;border:1px solid rgba(251,191,36,.22)}
+.tc-arrow{position:absolute;top:18px;right:16px;color:var(--t3);font-size:15px;opacity:0;transform:translateX(-5px);transition:all .22s;z-index:1}
+.tool-card:hover .tc-arrow{opacity:1;transform:translateX(0)}
+
+/* ── POPULAR ──────────────────────────────── */
+.popular-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:14px}
+.pop-card{padding:20px 22px;border-radius:18px;cursor:pointer;display:flex;align-items:center;gap:15px;background:var(--s1);border:1px solid var(--b1);transition:all .25s}
+.pop-card:hover{transform:translateY(-4px);border-color:var(--b2);box-shadow:0 14px 44px rgba(0,0,0,.22)}
+.pop-icon{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.pop-name{font-family:'Syne',sans-serif;font-size:14.5px;font-weight:700;color:var(--t1);margin-bottom:2px}
+.pop-desc{font-size:11.5px;color:var(--t2)}
+.pop-arr{color:var(--t3);font-size:15px;margin-left:auto;flex-shrink:0}
+
+/* ── FEATURES ─────────────────────────────── */
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px;margin-top:48px}
+.feat-card{padding:30px 26px;border-radius:22px;background:var(--s1);border:1px solid var(--b1);transition:all .25s}
+.feat-card:hover{border-color:var(--b2);transform:translateY(-4px);box-shadow:0 14px 44px rgba(0,0,0,.18)}
+.feat-ico{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:18px}
+.feat-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--t1);margin-bottom:8px}
+.feat-desc{font-size:13.5px;color:var(--t2);line-height:1.6}
+
+/* ── CTA ──────────────────────────────────── */
+.cta-banner{border-radius:28px;padding:64px 52px;text-align:center;background:linear-gradient(135deg,rgba(29,140,248,.13),rgba(6,182,212,.09));border:1px solid rgba(29,140,248,.2);position:relative;overflow:hidden}
+.cta-banner::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(29,140,248,.11) 0%,transparent 65%);pointer-events:none}
+.cta-banner h2{font-family:'Syne',sans-serif;font-size:clamp(26px,4vw,44px);font-weight:800;letter-spacing:-1px;color:var(--t1);margin-bottom:10px;position:relative}
+.cta-banner p{font-size:15.5px;color:var(--t2);margin-bottom:28px;position:relative}
+
+/* ── FOOTER ───────────────────────────────── */
+footer{position:relative;z-index:1;border-top:1px solid var(--b1);padding:60px 52px 32px;margin-top:0}
+.footer-inner{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:52px}
+.foot-logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;background:linear-gradient(135deg,#1d8cf8,#38bdf8,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.foot-logo-icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#1d8cf8,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.foot-desc{font-size:13.5px;color:var(--t2);line-height:1.72;max-width:280px}
+.foot-socials{display:flex;gap:10px;margin-top:18px}
+.foot-soc{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2);background:var(--s2);border:1px solid var(--b1);cursor:pointer;transition:all .2s}
+.foot-soc:hover{color:var(--ac2);border-color:rgba(29,140,248,.3)}
+.foot-col-h{font-family:'Syne',sans-serif;font-size:13.5px;font-weight:700;color:var(--t1);margin-bottom:14px}
+.foot-lnk{font-size:12.5px;color:var(--t2);display:block;margin-bottom:9px;cursor:pointer;transition:color .2s}
+.foot-lnk:hover{color:var(--ac2)}
+.footer-bottom{max-width:1280px;margin:36px auto 0;padding-top:22px;border-top:1px solid var(--b1);display:flex;justify-content:space-between;align-items:center}
+.foot-copy{font-size:12px;color:var(--t3)}
+.status-dot{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t3)}
+.sdot{width:6px;height:6px;border-radius:50%;background:#10b981;animation:pulse 2.2s ease-in-out infinite}
+
+/* ── MODAL ────────────────────────────────── */
+.modal-bg{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.78);backdrop-filter:blur(12px);animation:fadeIn .2s ease-out}
+.modal-bg.hidden{display:none}
+.modal-box{width:100%;max-width:680px;max-height:92vh;overflow-y:auto;border-radius:26px;background:var(--bg2);border:1px solid var(--b2);box-shadow:0 40px 120px rgba(0,0,0,.7);animation:slideUp .3s ease-out}
+.modal-head{padding:26px 30px 0;display:flex;align-items:flex-start;justify-content:space-between}
+.modal-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--t1)}
+.modal-sub-text{font-size:13px;color:var(--t2);margin-top:3px}
+.modal-close{width:34px;height:34px;border-radius:9px;border:1px solid var(--b2);background:var(--s2);color:var(--t2);font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;flex-shrink:0;line-height:1}
+.modal-close:hover{color:var(--t1);border-color:var(--b3)}
+.modal-body{padding:22px 30px 30px}
+
+/* ── DROP ZONE ────────────────────────────── */
+.dropzone{border:2px dashed var(--b2);border-radius:18px;padding:42px 28px;text-align:center;cursor:pointer;transition:all .25s;position:relative}
+.dropzone:hover,.dropzone.over{border-color:var(--ac);background:rgba(29,140,248,.05)}
+.dz-input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.dz-ico{font-size:42px;margin-bottom:12px}
+.dz-title{font-family:'Syne',sans-serif;font-size:17px;font-weight:700;color:var(--t1);margin-bottom:5px}
+.dz-hint{font-size:12.5px;color:var(--t3)}
+.dz-types{font-size:11px;color:var(--t3);margin-top:6px}
+
+/* ── OPTIONS ──────────────────────────────── */
+.opt-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;padding:14px 16px;background:var(--s2);border-radius:13px;border:1px solid var(--b1)}
+.opt-label{font-size:13px;color:var(--t2);font-weight:500;flex-shrink:0}
+.opt-input{padding:7px 12px;border-radius:9px;background:var(--s3);border:1px solid var(--b2);color:var(--t1);font-size:13px;font-family:'Figtree',sans-serif;outline:none;width:90px}
+.opt-input:focus{border-color:var(--ac)}
+.opt-select{padding:7px 12px;border-radius:9px;background:var(--s3);border:1px solid var(--b2);color:var(--t1);font-size:13px;font-family:'Figtree',sans-serif;outline:none;cursor:pointer}
+.opt-select option{background:var(--bg2)}
+.opt-range{flex:1;accent-color:var(--ac)}
+.opt-val{font-size:13px;color:var(--ac2);font-weight:600;min-width:36px}
+
+/* ── FILE LIST ────────────────────────────── */
+.file-list{display:flex;flex-direction:column;gap:9px;margin-top:14px}
+.file-row{padding:12px 14px;border-radius:12px;display:flex;align-items:center;gap:11px;background:var(--s2);border:1px solid var(--b1)}
+.file-ico{width:34px;height:34px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;background:linear-gradient(135deg,rgba(29,140,248,.18),rgba(6,182,212,.14))}
+.file-name{flex:1;font-size:13.5px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-sz{font-size:11.5px;color:var(--t3);flex-shrink:0}
+.file-rm{width:26px;height:26px;border-radius:7px;border:none;background:transparent;color:var(--t3);font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s}
+.file-rm:hover{color:var(--red);background:rgba(255,107,107,.1)}
+
+/* ── PROGRESS ─────────────────────────────── */
+.prog-wrap{margin-top:14px}
+.prog-labels{display:flex;justify-content:space-between;font-size:12.5px;color:var(--t2);margin-bottom:7px}
+.prog-bar{height:5px;background:var(--s2);border-radius:100px;overflow:hidden}
+.prog-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,#1d8cf8,#38bdf8,#06b6d4);background-size:300% 100%;animation:shimmer 1.4s ease infinite;transition:width .25s ease}
+
+/* ── BUTTONS ──────────────────────────────── */
+.modal-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+.btn-convert{flex:1;padding:13px;border-radius:13px;font-size:14.5px;font-weight:600;border:none;background:linear-gradient(135deg,#1d8cf8,#06b6d4);color:#fff;box-shadow:0 4px 20px rgba(29,140,248,.28);transition:all .2s;min-width:140px}
+.btn-convert:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 7px 28px rgba(29,140,248,.4)}
+.btn-convert:disabled{opacity:.4;cursor:not-allowed}
+.btn-dl{padding:11px 18px;border-radius:13px;font-size:13.5px;font-weight:600;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 4px 20px rgba(16,185,129,.22);transition:all .2s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-dl:hover{transform:translateY(-1px);box-shadow:0 7px 28px rgba(16,185,129,.35)}
+.btn-reset{padding:13px 18px;border-radius:13px;font-size:14px;font-weight:500;background:var(--s2);border:1px solid var(--b2);color:var(--t1);transition:all .2s}
+.btn-reset:hover{border-color:var(--b3)}
+
+/* ── RESULT ───────────────────────────────── */
+.result-wrap{padding:8px 0}
+.result-ico{width:68px;height:68px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:28px;animation:bounceIn .45s cubic-bezier(.34,1.56,.64,1) both}
+.result-ico.ok{background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.1));border:1px solid rgba(16,185,129,.28)}
+.result-ico.err{background:linear-gradient(135deg,rgba(239,68,68,.18),rgba(220,38,38,.1));border:1px solid rgba(239,68,68,.28)}
+.result-title{font-family:'Syne',sans-serif;font-size:19px;font-weight:800;color:var(--t1);margin-bottom:5px;text-align:center}
+.result-info{font-size:13px;color:var(--t2);margin-bottom:14px;text-align:center}
+.result-files{display:flex;flex-direction:column;gap:8px}
+.dl-row{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--s2);border-radius:12px;border:1px solid var(--b1)}
+.dl-name{flex:1;font-size:13px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl-sz{font-size:11px;color:var(--t3);flex-shrink:0}
+.spinner-ico{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite}
+.privacy-note{text-align:center;font-size:11.5px;color:var(--t3);margin-top:12px}
+.server-note{padding:14px 16px;border-radius:12px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.2);font-size:13px;color:#f59e0b;line-height:1.55;margin-bottom:14px}
+.size-info{text-align:center;font-size:12px;color:var(--t2);margin-top:10px;padding:8px 14px;background:var(--s2);border-radius:9px}
+.empty-msg{grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--t3);font-size:15px}
+
+/* ── RESPONSIVE ───────────────────────────── */
+@media(max-width:960px){
+  nav{padding:0 20px}
+  .nav-link:not(:last-of-type){display:none}
+  .search-wrap{display:none}
+  section.content{padding:60px 20px}
+  .footer-inner{grid-template-columns:1fr 1fr;gap:32px}
+  footer{padding:48px 20px 24px}
+  .cta-banner{padding:44px 28px}
+}
+@media(max-width:560px){
+  .tool-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+  .footer-inner{grid-template-columns:1fr}
+  .footer-bottom{flex-direction:column;gap:10px;text-align:center}
+  .modal-box{border-radius:18px}
+  .modal-head,.modal-body{padding-left:18px;padding-right:18px}
+  .hero-stats{gap:20px}
+}
+</style>
+</head>
+<body>
+
+<div class="orbs">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+  <div class="orb orb-c"></div>
+  <div class="orb orb-d"></div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-icon">⬇</div>
+    Drag&amp;Drop
+  </div>
+  <div class="nav-r">
+    <span class="nav-link" onclick="gotoSection('tools')">Tools</span>
+    <span class="nav-link" onclick="gotoSection('features')">Features</span>
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="text" placeholder="Search tools…" id="search-input" oninput="handleSearch(this.value)"/>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()"><div class="theme-knob"></div></button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">
+    <span class="badge-dot"></span>
+    11 real converters · runs 100% in your browser
+  </div>
+  <h1 class="hero-title">
+    Drop a file.<br><span class="grad">Get it converted.</span>
+  </h1>
+  <p class="hero-sub">
+    Real PDF and image conversion right in your browser. No uploads, no server, no sign-up. Your files never leave your device.
+  </p>
+  <div class="hero-cta">
+    <button class="btn-primary" onclick="gotoSection('tools')">Try a Tool Now →</button>
+    <button class="btn-ghost" onclick="gotoSection('features')">How It Works ↓</button>
+  </div>
+  <div class="hero-stats">
+    <div><div class="stat-n">11</div><div class="stat-l">Real Converters</div></div>
+    <div><div class="stat-n">0 ms</div><div class="stat-l">Upload Time</div></div>
+    <div><div class="stat-n">100%</div><div class="stat-l">Private</div></div>
+    <div><div class="stat-n">Free</div><div class="stat-l">Always</div></div>
+  </div>
+</div>
+
+<!-- TOOLS -->
+<section class="content" id="tools">
+  <div style="margin-bottom:44px">
+    <div class="sec-label">All Tools</div>
+    <h2 class="sec-title">Pick a tool and convert</h2>
+    <p class="sec-sub">
+      <span style="color:#10b981;font-weight:600">✓ Works Now</span> — converts in your browser.&nbsp;
+      <span style="color:#f59e0b;font-weight:600">⚙ Needs Server</span> — requires Node.js backend.
+    </p>
+  </div>
+  <div class="cat-tabs" id="cat-tabs">
+    <button class="cat-tab active" data-cat="all">🗂 All Tools</button>
+    <button class="cat-tab" data-cat="pdf">📄 PDF Tools</button>
+    <button class="cat-tab" data-cat="image">🖼 Image Tools</button>
+    <button class="cat-tab" data-cat="document">📝 Document Tools</button>
+  </div>
+  <div class="tool-grid" id="tool-grid"></div>
+</section>
+
+<!-- POPULAR -->
+<section class="content" id="popular" style="padding-top:0">
+  <div style="margin-bottom:30px">
+    <div class="sec-label">Most Used</div>
+    <h2 class="sec-title">Popular tools</h2>
+  </div>
+  <div class="popular-grid" id="popular-grid"></div>
+</section>
+
+<!-- FEATURES -->
+<section class="content" id="features">
+  <div style="text-align:center">
+    <div class="sec-label" style="text-align:center">Why Drag&amp;Drop</div>
+    <h2 class="sec-title" style="text-align:center">Built for everyone</h2>
+    <p class="sec-sub" style="margin:0 auto;text-align:center">All processing runs inside your browser using pdf-lib, PDF.js and the Canvas API. Zero data sent anywhere.</p>
+  </div>
+  <div class="feat-grid" id="feat-grid"></div>
+</section>
+
+<!-- CTA -->
+<section class="content" style="padding-top:0">
+  <div class="cta-banner">
+    <h2>Start converting right now</h2>
+    <p>No account. No upload. Just drop a file and go.</p>
+    <button class="btn-primary" style="font-size:15px;padding:15px 40px;position:relative" onclick="gotoSection('tools')">Try a Tool Free →</button>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="foot-logo">
+        <div class="foot-logo-icon">⬇</div>
+        Drag&amp;Drop
+      </div>
+      <p class="foot-desc">The fastest, most private way to convert PDFs and images. Everything runs in your browser — nothing is ever uploaded.</p>
+      <div class="foot-socials">
+        <div class="foot-soc">𝕏</div>
+        <div class="foot-soc">in</div>
+        <div class="foot-soc">f</div>
+      </div>
+    </div>
+    <div>
+      <div class="foot-col-h">PDF Tools</div>
+      <a class="foot-lnk" onclick="openTool('merge-pdf')">Merge PDF</a>
+      <a class="foot-lnk" onclick="openTool('split-pdf')">Split PDF</a>
+      <a class="foot-lnk" onclick="openTool('compress-pdf')">Compress PDF</a>
+      <a class="foot-lnk" onclick="openTool('pdf-to-jpg')">PDF to JPG</a>
+      <a class="foot-lnk" onclick="openTool('jpg-to-pdf')">JPG to PDF</a>
+      <a class="foot-lnk" onclick="openTool('rotate-pdf')">Rotate PDF</a>
+    </div>
+    <div>
+      <div class="foot-col-h">Image Tools</div>
+      <a class="foot-lnk" onclick="openTool('jpg-to-png')">JPG to PNG</a>
+      <a class="foot-lnk" onclick="openTool('png-to-jpg')">PNG to JPG</a>
+      <a class="foot-lnk" onclick="openTool('resize-image')">Resize Image</a>
+      <a class="foot-lnk" onclick="openTool('compress-image')">Compress Image</a>
+    </div>
+    <div>
+      <div class="foot-col-h">Legal</div>
+      <a class="foot-lnk">Privacy Policy</a>
+      <a class="foot-lnk">Terms of Service</a>
+      <a class="foot-lnk">Contact</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span class="foot-copy">© 2026 Drag&amp;Drop. All rights reserved.</span>
+    <span class="status-dot"><span class="sdot"></span>All systems operational</span>
+  </div>
+</footer>
+
+<!-- MODAL -->
+<div class="modal-bg hidden" id="modal-bg" onclick="handleBgClick(event)">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-sub-text" id="modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+if(typeof pdfjsLib!=='undefined')
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── DATA ──────────────────────────────────────
+const TOOLS=[
+  {id:'merge-pdf',    cat:'pdf',   icon:'⊕',  label:'Merge PDF',       desc:'Combine multiple PDFs into one',    color:'#1d8cf8',accent:'#38bdf8',multi:true, works:true},
+  {id:'split-pdf',    cat:'pdf',   icon:'⊗',  label:'Split PDF',        desc:'Extract pages from your PDF',       color:'#0ea5e9',accent:'#06b6d4',            works:true},
+  {id:'compress-pdf', cat:'pdf',   icon:'⊘',  label:'Compress PDF',     desc:'Reduce PDF file size',              color:'#38bdf8',accent:'#0284c7',            works:true},
+  {id:'pdf-to-jpg',   cat:'pdf',   icon:'↗',  label:'PDF to JPG',       desc:'Convert each page to an image',     color:'#0ea5e9',accent:'#7dd3fc',            works:true},
+  {id:'jpg-to-pdf',   cat:'pdf',   icon:'↙',  label:'JPG to PDF',       desc:'Turn images into a PDF file',       color:'#38bdf8',accent:'#1d8cf8',multi:true, works:true},
+  {id:'rotate-pdf',   cat:'pdf',   icon:'↻',  label:'Rotate PDF',       desc:'Rotate pages to any angle',         color:'#06b6d4',accent:'#0ea5e9',            works:true},
+  {id:'unlock-pdf',   cat:'pdf',   icon:'⊛',  label:'Unlock PDF',       desc:'Remove PDF password protection',    color:'#7dd3fc',accent:'#38bdf8',            works:false},
+  {id:'jpg-to-png',   cat:'image', icon:'⇄',  label:'JPG to PNG',       desc:'Convert with transparency',         color:'#1d8cf8',accent:'#06b6d4',            works:true},
+  {id:'png-to-jpg',   cat:'image', icon:'⇆',  label:'PNG to JPG',       desc:'Smaller file, same quality',        color:'#0ea5e9',accent:'#38bdf8',            works:true},
+  {id:'resize-image', cat:'image', icon:'⤢',  label:'Resize Image',     desc:'Change image dimensions',           color:'#38bdf8',accent:'#0284c7',            works:true},
+  {id:'compress-image',cat:'image',icon:'⊟',  label:'Compress Image',   desc:'Shrink image file size',            color:'#06b6d4',accent:'#1d8cf8',multi:true, works:true},
+  {id:'word-to-pdf',  cat:'document',icon:'W', label:'Word to PDF',     desc:'Convert DOCX files to PDF',         color:'#1d8cf8',accent:'#7dd3fc',            works:false},
+  {id:'pdf-to-word',  cat:'document',icon:'←W',label:'PDF to Word',    desc:'Editable Word document',            color:'#0ea5e9',accent:'#38bdf8',            works:false},
+  {id:'ppt-to-pdf',   cat:'document',icon:'P', label:'PPT to PDF',      desc:'Convert presentations to PDF',      color:'#38bdf8',accent:'#06b6d4',            works:false},
+  {id:'excel-to-pdf', cat:'document',icon:'X', label:'Excel to PDF',    desc:'Spreadsheets to PDF',               color:'#06b6d4',accent:'#0ea5e9',            works:false},
+];
+const POPULAR_IDS=['merge-pdf','compress-pdf','pdf-to-jpg','jpg-to-pdf','compress-image','resize-image'];
+const FEATURES=[
+  {icon:'🔒',title:'100% Private',       desc:'Your files never leave your device. All processing happens locally in your browser with no server.',color:'#1d8cf8'},
+  {icon:'⚡',title:'Instant Results',    desc:'No upload wait time. Files are processed the moment you click Convert.',                           color:'#0ea5e9'},
+  {icon:'🆓',title:'Completely Free',    desc:'No account, no watermarks, no limits. Every browser-based tool is free forever.',                 color:'#10b981'},
+  {icon:'🌐',title:'Works Offline',      desc:'After the first page load, all browser-based tools work without internet.',                       color:'#06b6d4'},
+  {icon:'📦',title:'Batch Processing',   desc:'Merge dozens of PDFs, convert multiple images or compress entire batches at once.',               color:'#38bdf8'},
+  {icon:'🔬',title:'Professional Quality',desc:'Powered by pdf-lib, PDF.js and Canvas API — trusted by enterprise applications worldwide.',      color:'#0284c7'},
+];
+const ACCEPT={
+  'merge-pdf':'.pdf','split-pdf':'.pdf','compress-pdf':'.pdf','pdf-to-jpg':'.pdf',
+  'jpg-to-pdf':'.jpg,.jpeg,.png,.webp','rotate-pdf':'.pdf','unlock-pdf':'.pdf',
+  'jpg-to-png':'.jpg,.jpeg','png-to-jpg':'.png',
+  'resize-image':'.jpg,.jpeg,.png,.webp','compress-image':'.jpg,.jpeg,.png,.webp',
+  'word-to-pdf':'.doc,.docx','pdf-to-word':'.pdf','ppt-to-pdf':'.ppt,.pptx','excel-to-pdf':'.xls,.xlsx',
+};
+
+// ── STATE ─────────────────────────────────────
+let CT=null,UF=[],cat='all',sq='',dark=true;
+const $=id=>document.getElementById(id);
+function gotoSection(id){ $(id)?.scrollIntoView({behavior:'smooth'}); }
+function toggleTheme(){ dark=!dark; document.body.classList.toggle('light',!dark); }
+function fmtB(b){ if(!b)return'0 B'; if(b<1024)return b+' B'; if(b<1048576)return(b/1024).toFixed(1)+' KB'; return(b/1048576).toFixed(1)+' MB'; }
+function fEmo(n){ const e=n.split('.').pop().toLowerCase(); return e==='pdf'?'📄':['jpg','jpeg','png','webp','gif'].includes(e)?'🖼️':'📁'; }
+function dlBlob(blob,name){ const u=URL.createObjectURL(blob),a=document.createElement('a'); a.href=u;a.download=name;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(u),5000); }
+
+// ── RENDER ────────────────────────────────────
+function filtered(){ return sq?TOOLS.filter(t=>t.label.toLowerCase().includes(sq)||t.desc.toLowerCase().includes(sq)):cat==='all'?TOOLS:TOOLS.filter(t=>t.cat===cat); }
+
+function renderGrid(){
+  const g=$('tool-grid'),list=filtered();
+  if(!list.length){g.innerHTML=`<div class="empty-msg">No tools match "<strong>${sq}</strong>"</div>`;return;}
+  g.innerHTML=list.map((t,i)=>`
+    <div class="tool-card" style="animation-delay:${i*.04}s;--cg:linear-gradient(135deg,${t.color}08,${t.accent}06)" onclick="openTool('${t.id}')">
+      <div class="tc-icon" style="background:linear-gradient(135deg,${t.color}22,${t.accent}18);border:1px solid ${t.color}30;color:${t.color}">${t.icon}</div>
+      <div class="tc-name">${t.label}</div>
+      <div class="tc-desc">${t.desc}</div>
+      <div><span class="tc-badge ${t.works?'works':'server'}">${t.works?'✓ Works Now':'⚙ Needs Server'}</span></div>
+      <div class="tc-arrow">→</div>
+    </div>`).join('');
+}
+function renderPop(){
+  $('popular-grid').innerHTML=POPULAR_IDS.map(id=>{
+    const t=TOOLS.find(x=>x.id===id);if(!t)return'';
+    return`<div class="pop-card" onclick="openTool('${t.id}')">
+      <div class="pop-icon" style="background:linear-gradient(135deg,${t.color}22,${t.accent}18);border:1px solid ${t.color}28;color:${t.color}">${t.icon}</div>
+      <div><div class="pop-name">${t.label}</div><div class="pop-desc">${t.desc}</div></div>
+      <div class="pop-arr">→</div></div>`;
+  }).join('');
+}
+function renderFeat(){
+  $('feat-grid').innerHTML=FEATURES.map(f=>`
+    <div class="feat-card">
+      <div class="feat-ico" style="background:linear-gradient(135deg,${f.color}22,${f.color}10);border:1px solid ${f.color}28">${f.icon}</div>
+      <div class="feat-title">${f.title}</div>
+      <div class="feat-desc">${f.desc}</div>
+    </div>`).join('');
+}
+
+$('cat-tabs').addEventListener('click',e=>{
+  const b=e.target.closest('.cat-tab');if(!b)return;
+  document.querySelectorAll('.cat-tab').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');cat=b.dataset.cat;sq='';$('search-input').value='';renderGrid();
+});
+function handleSearch(v){ sq=v.toLowerCase().trim();renderGrid(); }
+
+// ── MODAL ─────────────────────────────────────
+function openTool(id){
+  const t=TOOLS.find(x=>x.id===id);if(!t)return;
+  CT=t;UF=[];
+  $('modal-title').textContent=t.label;
+  $('modal-sub').textContent=t.desc;
+  renderIdle();
+  $('modal-bg').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeModal(){ $('modal-bg').classList.add('hidden');document.body.style.overflow='';CT=null;UF=[]; }
+function handleBgClick(e){ if(e.target.id==='modal-bg')closeModal(); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModal(); });
+
+function renderIdle(){
+  const t=CT;
+  let opts='';
+  if(t.id==='rotate-pdf') opts=`<div class="opt-row"><span class="opt-label">Rotate by:</span><select class="opt-select" id="opt-angle"><option value="90">90° Clockwise</option><option value="180">180°</option><option value="270">270° (CCW)</option></select></div>`;
+  if(t.id==='split-pdf') opts=`<div class="opt-row"><span class="opt-label">Pages:</span><input class="opt-input" id="opt-pages" placeholder="e.g. 1-3,5" style="width:130px"/><span style="font-size:12px;color:var(--t3)">blank = split all pages</span></div>`;
+  if(['compress-image','png-to-jpg','jpg-to-png'].includes(t.id)) opts=`<div class="opt-row"><span class="opt-label">Quality:</span><input type="range" class="opt-range" id="opt-q" min="10" max="100" value="82" oninput="$('opt-qv').textContent=this.value+'%'"/><span class="opt-val" id="opt-qv">82%</span></div>`;
+  if(t.id==='resize-image') opts=`<div class="opt-row"><span class="opt-label">Width px:</span><input class="opt-input" id="opt-w" placeholder="auto" type="number" min="1"/><span class="opt-label">Height px:</span><input class="opt-input" id="opt-h" placeholder="auto" type="number" min="1"/><span style="font-size:12px;color:var(--t3)">aspect ratio kept if only one is set</span></div>`;
+  if(t.id==='pdf-to-jpg') opts=`<div class="opt-row"><span class="opt-label">Quality:</span><select class="opt-select" id="opt-scale"><option value="1.5">Normal (1.5×)</option><option value="2" selected>High (2×)</option><option value="3">Very High (3×)</option></select></div>`;
+  const srvNote=!t.works?`<div class="server-note">⚙ <strong>${t.label}</strong> needs a Node.js backend (LibreOffice CLI). The upload UI is ready — connect it to <code>server.js</code> to enable real conversion.</div>`:'';
+  $('modal-body').innerHTML=`${srvNote}
+    <div class="dropzone" id="dz">
+      <input type="file" class="dz-input" id="dz-in" accept="${ACCEPT[t.id]||'*'}" ${t.multi?'multiple':''} onchange="addFiles(this.files)"/>
+      <div class="dz-ico" id="dz-ico">📁</div>
+      <div class="dz-title">Drag &amp; drop your ${t.multi?'files':'file'} here</div>
+      <div class="dz-hint">or click to browse your device</div>
+      <div class="dz-types">Accepts: ${ACCEPT[t.id]||'all'} · No size limit</div>
+    </div>
+    ${opts}
+    <div class="file-list" id="fl"></div>
+    <div class="modal-actions"><button class="btn-convert" id="cvt-btn" disabled onclick="startConvert()">${t.works?'Convert Now ⚡':'Convert (needs server)'}</button></div>
+    <div class="privacy-note">🔒 ${t.works?'Processed entirely in your browser — files never uploaded':'Files processed on your server and auto-deleted after 1 hr'}</div>`;
+  const dz=$('dz');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');$('dz-ico').textContent='📂';});
+  dz.addEventListener('dragleave',()=>{dz.classList.remove('over');$('dz-ico').textContent='📁';});
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');$('dz-ico').textContent='📁';addFiles(e.dataTransfer.files);});
+}
+function addFiles(fl){ UF=[...UF,...Array.from(fl)].slice(0,30);renderFL(); }
+function renderFL(){
+  $('fl').innerHTML=UF.map((f,i)=>`<div class="file-row"><div class="file-ico">${fEmo(f.name)}</div><div class="file-name">${f.name}</div><div class="file-sz">${fmtB(f.size)}</div><button class="file-rm" onclick="rmF(${i})">✕</button></div>`).join('');
+  $('cvt-btn').disabled=UF.length===0;
+}
+function rmF(i){ UF.splice(i,1);renderFL(); }
+
+function showProg(lbl='Processing…'){
+  $('modal-body').innerHTML=`<div style="padding:24px 0">
+    <div class="prog-wrap">
+      <div class="prog-labels"><span id="pl">${lbl}</span><span id="pp">0%</span></div>
+      <div class="prog-bar"><div class="prog-fill" id="pf" style="width:0%"></div></div>
+    </div>
+    <div style="text-align:center;margin-top:28px;color:var(--t2);font-size:13.5px">Processing in your browser…</div>
+    <div class="modal-actions"><button class="btn-convert" disabled><span class="spinner-ico"></span>&nbsp;Working…</button></div>
+  </div>`;
+}
+function setProg(pct,lbl){
+  const f=$('pf'),p=$('pp'),l=$('pl');
+  if(f)f.style.width=pct+'%';if(p)p.textContent=Math.round(pct)+'%';if(l&&lbl)l.textContent=lbl;
+}
+function showSuccess(files,extra=''){
+  window._RF=files;
+  $('modal-body').innerHTML=`<div class="result-wrap">
+    <div class="result-ico ok">✅</div>
+    <div class="result-title">Done!</div>
+    <div class="result-info">${files.length===1?'Your file is ready':'Your '+files.length+' files are ready'}</div>
+    ${extra}
+    <div class="result-files">${files.map((f,i)=>`
+      <div class="dl-row">
+        <div class="file-ico">${fEmo(f.name)}</div>
+        <div class="dl-name">${f.name}</div>
+        <div class="dl-sz">${fmtB(f.blob.size)}</div>
+        <button class="btn-dl" onclick="dlBlob(window._RF[${i}].blob,'${f.name}')">⬇ Download</button>
+      </div>`).join('')}
+    </div>
+    <div class="modal-actions" style="margin-top:18px">
+      <button class="btn-reset" onclick="resetM()">Convert Another</button>
+      ${files.length>1?'<button class="btn-dl" onclick="dlAll()">⬇ Download All ZIP</button>':''}
+    </div>
+  </div>
+  <div class="privacy-note">🔒 Files exist only in your browser memory</div>`;
+}
+function showErr(msg){
+  $('modal-body').innerHTML=`<div class="result-wrap">
+    <div class="result-ico err">❌</div>
+    <div class="result-title">Conversion Failed</div>
+    <div class="result-info" style="color:var(--red);margin-bottom:18px">${msg}</div>
+    <div class="modal-actions"><button class="btn-reset" onclick="resetM()">Try Again</button></div>
+  </div>`;
+}
+function resetM(){ UF=[];renderIdle(); }
+async function dlAll(){
+  const zip=new JSZip();
+  window._RF.forEach(f=>zip.file(f.name,f.blob));
+  dlBlob(await zip.generateAsync({type:'blob'}),'draganddrop_output.zip');
+}
+
+// ── CONVERSION ROUTER ─────────────────────────
+async function startConvert(){
+  if(!UF.length)return;
+  showProg('Starting…');
+  try{
+    switch(CT.id){
+      case 'merge-pdf':      await doMergePdf();break;
+      case 'split-pdf':      await doSplitPdf();break;
+      case 'compress-pdf':   await doCompressPdf();break;
+      case 'pdf-to-jpg':     await doPdfToJpg();break;
+      case 'jpg-to-pdf':     await doJpgToPdf();break;
+      case 'rotate-pdf':     await doRotatePdf();break;
+      case 'jpg-to-png':     await doImgConvert('png');break;
+      case 'png-to-jpg':     await doImgConvert('jpeg');break;
+      case 'compress-image': await doCompressImg();break;
+      case 'resize-image':   await doResizeImg();break;
+      default: showErr('This tool needs the Node.js backend. See README for setup.');return;
+    }
+  }catch(e){console.error(e);showErr(e.message||'Unexpected error — check browser console.');}
+}
+
+// ── PDF: MERGE ────────────────────────────────
+async function doMergePdf(){
+  const {PDFDocument}=PDFLib;
+  const merged=await PDFDocument.create();
+  for(let i=0;i<UF.length;i++){
+    setProg((i/UF.length)*88,`Merging file ${i+1}/${UF.length}…`);
+    const bytes=await UF[i].arrayBuffer();
+    let src;try{src=await PDFDocument.load(bytes);}catch(e){throw new Error(`"${UF[i].name}" is not a valid PDF or is password-protected.`);}
+    const pages=await merged.copyPages(src,src.getPageIndices());
+    pages.forEach(p=>merged.addPage(p));
+  }
+  setProg(95,'Saving…');
+  const out=await merged.save();
+  showSuccess([{name:'merged.pdf',blob:new Blob([out],{type:'application/pdf'})}]);
+}
+
+// ── PDF: SPLIT ────────────────────────────────
+async function doSplitPdf(){
+  const {PDFDocument}=PDFLib;
+  setProg(20,'Loading PDF…');
+  const bytes=await UF[0].arrayBuffer();
+  let src;try{src=await PDFDocument.load(bytes);}catch(e){throw new Error('Could not read PDF. It may be corrupt or password-protected.');}
+  const total=src.getPageCount();
+  const raw=($('opt-pages')||{}).value||'';
+  let idx=[];
+  if(!raw.trim()){idx=Array.from({length:total},(_,i)=>i);}
+  else{
+    raw.split(',').forEach(seg=>{
+      const p=seg.trim().split('-');
+      if(p.length===1){const n=parseInt(p[0])-1;if(!isNaN(n)&&n>=0&&n<total)idx.push(n);}
+      else{const s=parseInt(p[0])-1,e=parseInt(p[1])-1;for(let i=Math.max(0,s);i<=Math.min(e,total-1);i++)idx.push(i);}
+    });
+    if(!idx.length)throw new Error(`No valid pages in range "${raw}". PDF has ${total} pages.`);
+  }
+  const results=[];
+  const base=UF[0].name.replace('.pdf','');
+  for(let i=0;i<idx.length;i++){
+    setProg(20+(i/idx.length)*75,`Extracting page ${idx[i]+1}…`);
+    const doc=await PDFDocument.create();
+    const [pg]=await doc.copyPages(src,[idx[i]]);
+    doc.addPage(pg);
+    const out=await doc.save();
+    results.push({name:`${base}_page${idx[i]+1}.pdf`,blob:new Blob([out],{type:'application/pdf'})});
+  }
+  showSuccess(results);
+}
+
+// ── PDF: COMPRESS ─────────────────────────────
+async function doCompressPdf(){
+  const {PDFDocument}=PDFLib;
+  setProg(30,'Loading PDF…');
+  const bytes=await UF[0].arrayBuffer();
+  let doc;try{doc=await PDFDocument.load(bytes,{updateMetadata:false});}catch(e){throw new Error('Could not read PDF.');}
+  setProg(65,'Compressing…');
+  const out=await doc.save({useObjectStreams:true,addDefaultPage:false,objectsPerTick:100});
+  const orig=UF[0].size,comp=out.byteLength,pct=((1-comp/orig)*100).toFixed(1);
+  const name=UF[0].name.replace('.pdf','_compressed.pdf');
+  const extra=`<div class="size-info">📊 ${fmtB(orig)} → ${fmtB(comp)} &nbsp;·&nbsp; <strong style="color:${pct>0?'#10b981':'var(--t2)'}">${pct>0?'−'+pct+'% smaller':'No size change (already optimised)'}</strong></div>`;
+  showSuccess([{name,blob:new Blob([out],{type:'application/pdf'})}],extra);
+}
+
+// ── PDF: ROTATE ───────────────────────────────
+async function doRotatePdf(){
+  const {PDFDocument,degrees}=PDFLib;
+  const angle=parseInt(($('opt-angle')||{}).value||'90');
+  setProg(25,'Loading PDF…');
+  const bytes=await UF[0].arrayBuffer();
+  let doc;try{doc=await PDFDocument.load(bytes);}catch(e){throw new Error('Could not read PDF.');}
+  setProg(60,'Rotating pages…');
+  doc.getPages().forEach(p=>p.setRotation(degrees((p.getRotation().angle+angle)%360)));
+  setProg(85,'Saving…');
+  const out=await doc.save();
+  showSuccess([{name:UF[0].name.replace('.pdf',`_rotated${angle}deg.pdf`),blob:new Blob([out],{type:'application/pdf'})}]);
+}
+
+// ── PDF → JPG ─────────────────────────────────
+async function doPdfToJpg(){
+  const scale=parseFloat(($('opt-scale')||{}).value||'2');
+  setProg(8,'Loading PDF…');
+  let pdfDoc;try{pdfDoc=await pdfjsLib.getDocument({data:await UF[0].arrayBuffer()}).promise;}catch(e){throw new Error('Could not read PDF. It may be password-protected.');}
+  const total=pdfDoc.numPages,results=[],base=UF[0].name.replace('.pdf','');
+  for(let i=1;i<=total;i++){
+    setProg(8+(i-1)/total*88,`Rendering page ${i}/${total}…`);
+    const page=await pdfDoc.getPage(i);
+    const vp=page.getViewport({scale});
+    const canvas=document.createElement('canvas');
+    canvas.width=vp.width;canvas.height=vp.height;
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.92));
+    results.push({name:`${base}_page${i}.jpg`,blob});
+  }
+  showSuccess(results);
+}
+
+// ── JPG → PDF ─────────────────────────────────
+async function doJpgToPdf(){
+  const {PDFDocument}=PDFLib;
+  const doc=await PDFDocument.create();
+  for(let i=0;i<UF.length;i++){
+    setProg((i/UF.length)*90,`Embedding image ${i+1}/${UF.length}…`);
+    const bytes=await UF[i].arrayBuffer();
+    const nm=UF[i].name.toLowerCase();
+    let img;try{img=nm.endsWith('.png')?await doc.embedPng(bytes):await doc.embedJpg(bytes);}
+    catch(e){throw new Error(`Could not embed "${UF[i].name}". Must be a valid JPEG or PNG.`);}
+    const {width,height}=img.scale(1);
+    const page=doc.addPage([width,height]);
+    page.drawImage(img,{x:0,y:0,width,height});
+  }
+  setProg(95,'Saving…');
+  const out=await doc.save();
+  showSuccess([{name:'images.pdf',blob:new Blob([out],{type:'application/pdf'})}]);
+}
+
+// ── IMAGE HELPERS ─────────────────────────────
+function loadImg(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{URL.revokeObjectURL(url);res(img);};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('Cannot load: '+file.name));};
+    img.src=url;
+  });
+}
+function toBlob(canvas,type,q){ return new Promise(r=>canvas.toBlob(r,type,q)); }
+
+async function doImgConvert(fmt){
+  const q=parseInt(($('opt-q')||{}).value||'82')/100;
+  const mime=fmt==='jpeg'?'image/jpeg':'image/png';
+  const ext=fmt==='jpeg'?'jpg':'png';
+  const results=[];
+  for(let i=0;i<UF.length;i++){
+    setProg((i/UF.length)*90,`Converting ${UF[i].name}…`);
+    const img=await loadImg(UF[i]);
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth;c.height=img.naturalHeight;
+    const ctx=c.getContext('2d');
+    if(fmt==='jpeg'){ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);}
+    ctx.drawImage(img,0,0);
+    results.push({name:UF[i].name.replace(/\.[^/.]+$/,'.'+ext),blob:await toBlob(c,mime,q)});
+  }
+  showSuccess(results);
+}
+
+async function doCompressImg(){
+  const q=parseInt(($('opt-q')||{}).value||'82')/100;
+  const results=[];
+  for(let i=0;i<UF.length;i++){
+    setProg((i/UF.length)*90,`Compressing ${UF[i].name}…`);
+    const f=UF[i],img=await loadImg(f);
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth;c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    const png=f.name.toLowerCase().endsWith('.png');
+    const blob=await toBlob(c,png?'image/png':'image/jpeg',q);
+    const ext=png?'png':'jpg';
+    results.push({name:f.name.replace(/\.[^/.]+$/,'_compressed.'+ext),blob,orig:f.size,comp:blob.size});
+  }
+  const r=results[0];
+  const extra=results.length===1?`<div class="size-info">📊 ${fmtB(r.orig)} → ${fmtB(r.comp)} &nbsp;·&nbsp; <strong style="color:#10b981">−${((1-r.comp/r.orig)*100).toFixed(1)}% smaller</strong></div>`:'';
+  showSuccess(results,extra);
+}
+
+async function doResizeImg(){
+  const tw=parseInt(($('opt-w')||{}).value)||null;
+  const th=parseInt(($('opt-h')||{}).value)||null;
+  if(!tw&&!th)throw new Error('Enter at least a width or height value.');
+  const results=[];
+  for(let i=0;i<UF.length;i++){
+    setProg((i/UF.length)*90,`Resizing ${UF[i].name}…`);
+    const f=UF[i],img=await loadImg(f);
+    const ow=img.naturalWidth,oh=img.naturalHeight;
+    let nw,nh;
+    if(tw&&th){nw=tw;nh=th;}else if(tw){nw=tw;nh=Math.round(oh*(tw/ow));}else{nh=th;nw=Math.round(ow*(th/oh));}
+    const c=document.createElement('canvas');
+    c.width=nw;c.height=nh;
+    c.getContext('2d').drawImage(img,0,0,nw,nh);
+    const png=f.name.toLowerCase().endsWith('.png');
+    results.push({name:f.name.replace(/\.[^/.]+$/,`_${nw}x${nh}.${png?'png':'jpg'}`),blob:await toBlob(c,png?'image/png':'image/jpeg',0.93)});
+  }
+  showSuccess(results);
+}
+
+// ── SCROLL REVEAL ─────────────────────────────
+function revealObserve(){
+  const io=new IntersectionObserver(entries=>{
+    entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='';io.unobserve(e.target);}});
+  },{threshold:.1});
+  document.querySelectorAll('.tool-card,.pop-card,.feat-card').forEach(c=>{c.style.opacity='0';io.observe(c);});
+}
+
+renderGrid();renderPop();renderFeat();
+setTimeout(revealObserve,400);
+</script>
+</body>
+</html>
